@@ -1,22 +1,20 @@
--- Twist Hub is the best
+-- SEGMEN 1: MODIFIED NAMES & INITIALIZATION
 local _ = string.char(87,65,82,78,73,78,71,58,32,68,79,32,78,79,84,32,69,68,73,84,10,79,119,110,101,114,58,32,54,100,97,121,49,51)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
 local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 connections = connections or {}
 mainConns = mainConns or {}
 unloaded = false
 
--- Variabel Global
-local noclipEnabled = false
-local noFogEnabled = false
-local antiArtfulEnabled = false
-local fastArtfulEnabled = false
+local useAbilityRF = nil
+pcall(function()
+    useAbilityRF = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RemoteFunctions"):WaitForChild("UseAbility")
+end)
 
 local Storage = CoreGui:FindFirstChild("Highlight_Storage") or Instance.new("Folder")
 Storage.Name = "Highlight_Storage"
@@ -24,149 +22,251 @@ Storage.Parent = CoreGui
 
 local espConfigs = {
     Survivor = {Enabled=true, Name=true, HP=true, Fill=true, Outline=true, FillColor=Color3.fromRGB(0,255,0),   OutlineColor=Color3.fromRGB(0,255,0),   FillTransparency=0.5, OutlineTransparency=0},
-    Killer   = {Enabled=true, Name=true, HP=true, Fill=true, Outline=true, FillColor=Color3.fromRGB(255,0,0),   OutlineColor=Color3.fromRGB(255,0,0),   FillTransparency=0.5, OutlineTransparency=0},
+    Killer   = {Enabled=true, Name=true, HP=true, Fill=true, Outline=true, FillColor=Color3.fromRGB(255,0,0),  OutlineColor=Color3.fromRGB(255,0,0),   FillTransparency=0.5, OutlineTransparency=0},
     Ghost    = {Enabled=true, Name=true, HP=true, Fill=true, Outline=true, FillColor=Color3.fromRGB(0,255,255), OutlineColor=Color3.fromRGB(0,255,255), FillTransparency=0.5, OutlineTransparency=0},
 }
+local DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+local TextStrokeColor = Color3.fromRGB(0,0,0)
+
+local oldGui = CoreGui:FindFirstChild("Rayfield")
+if oldGui then pcall(function() oldGui:Destroy() end) end
+
+local function makeFallbackRayfield()
+    local DummyParagraph = { Set=function() end }
+    local DummyTab = {
+        CreateToggle=function() end, CreateSlider=function() end, CreateButton=function() end,
+        CreateParagraph=function() return DummyParagraph end, CreateDropdown=function() end,
+        CreateInput=function() end, CreateColorPicker=function() end,
+    }
+    return { CreateWindow=function() return { CreateTab=function() return DummyTab end } end }
+end
 
 local Rayfield
 do
     local ok, lib = pcall(function()
         return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
     end)
-    Rayfield = (ok and lib and lib.CreateWindow) and lib or nil
+    Rayfield = (ok and lib and lib.CreateWindow) and lib or makeFallbackRayfield()
 end
 
+-- NAMA WINDOW SUDAH DIGANTI DISINI
 local Window = Rayfield:CreateWindow({
-    Name = "Twist Hub",
-    LoadingTitle = "Use this at ur own risk",
-    LoadingSubtitle = "by twist",
-    ConfigurationSaving = {Enabled = false},
-    KeySystem = true,
-    KeySettings = {
-        Title = "Twist Hub | Key System",
-        Subtitle = "Enter key to continue",
-        Note = "Key is: twist-key-2026",
-        FileName = "TwistKey",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"twist-key-2026"}
-    }
+    Name = "HUB (D OF D) MODIFIED TY @maxiedsu/gonnered",
+    LoadingTitle = "Loading... Modified Version",
+    LoadingSubtitle = "by cutotoite_10",
+    ConfigurationSaving = {Enabled = false}
 })
 
--- ========== TAB ESP ==========
-local tabEsp = Window:CreateTab("Esp", 4483362458)
-tabEsp:CreateSection("Survivor ESP")
-tabEsp:CreateToggle({Name = "Survivor Enabled", CurrentValue = espConfigs.Survivor.Enabled, Callback = function(v) espConfigs.Survivor.Enabled = v end})
-tabEsp:CreateToggle({Name = "Survivor Name", CurrentValue = espConfigs.Survivor.Name, Callback = function(v) espConfigs.Survivor.Name = v end})
-tabEsp:CreateToggle({Name = "Survivor HP", CurrentValue = espConfigs.Survivor.HP, Callback = function(v) espConfigs.Survivor.HP = v end})
+local function createLabel(name,parent,posY)
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.Parent = parent
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1,0,0.5,0)
+    label.Position = UDim2.new(0,0,posY,0)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSansBold
+    label.TextStrokeColor3 = TextStrokeColor
+    label.TextStrokeTransparency = 0
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+    return label
+end
 
-tabEsp:CreateSection("Killer ESP")
-tabEsp:CreateToggle({Name = "Killer Enabled", CurrentValue = espConfigs.Killer.Enabled, Callback = function(v) espConfigs.Killer.Enabled = v end})
-tabEsp:CreateToggle({Name = "Killer Name", CurrentValue = espConfigs.Killer.Name, Callback = function(v) espConfigs.Killer.Name = v end})
-tabEsp:CreateToggle({Name = "Killer HP", CurrentValue = espConfigs.Killer.HP, Callback = function(v) espConfigs.Killer.HP = v end})
+local function setupHealthDisplay(plr, humanoid, healthLabel)
+    local function update()
+        local char = plr.Character
+        if not char then return end
+        local team = char.Parent and char.Parent.Name
+        local cfg = team and espConfigs[team]
+        if cfg and cfg.HP and cfg.Enabled then
+            healthLabel.Visible = true
+            healthLabel.Text = ("HP: %d/%d"):format(math.floor(humanoid.Health), humanoid.MaxHealth)
+        else
+            healthLabel.Visible = false
+        end
+    end
+    update()
+    connections[plr] = connections[plr] or {}
+    if connections[plr].HealthChanged then
+        pcall(function() connections[plr].HealthChanged:Disconnect() end)
+    end
+    connections[plr].HealthChanged = humanoid.HealthChanged:Connect(update)
+end
 
--- ========== TAB AUTO BLOCK ==========
-local tabAutoBlock = Window:CreateTab("Auto Block", 4483362458)
-local BLOCK_DISTANCE = 15
-local noM1Blocking = false
+local function updateESPConfig(plr)
+    if not plr or not plr.Character then return end
+    local char = plr.Character
+    local highlight = Storage:FindFirstChild(plr.Name.."_Highlight")
+    local nametag = Storage:FindFirstChild(plr.Name.."_Nametag")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local team = char.Parent and char.Parent.Name
+    local cfg = espConfigs[team]
+    if not cfg or not humanoid then return end
 
-tabAutoBlock:CreateToggle({Name = "No m1 blocking (you killer)", CurrentValue = noM1Blocking, Callback = function(v) noM1Blocking = v end})
-tabAutoBlock:CreateSlider({Name = "Blocking detect range", Range = {0, 50}, Increment = 1, CurrentValue = BLOCK_DISTANCE, Callback = function(v) BLOCK_DISTANCE = v end})
+    if highlight then
+        highlight.Enabled = cfg.Enabled
+        highlight.FillColor = cfg.FillColor
+        highlight.OutlineColor = cfg.OutlineColor
+        highlight.FillTransparency = (cfg.Fill and cfg.FillTransparency) or 1
+        highlight.OutlineTransparency = (cfg.Outline and cfg.OutlineTransparency) or 1
+    end
+    if nametag then
+        local nameLabel = nametag:FindFirstChild("PlayerName")
+        local healthLabel = nametag:FindFirstChild("HealthLabel")
+        if nameLabel then 
+            nameLabel.Visible = cfg.Enabled and cfg.Name
+            nameLabel.TextColor3 = cfg.FillColor
+            nameLabel.Text = plr.Name
+        end
+        if healthLabel then 
+            healthLabel.Visible = cfg.Enabled and cfg.HP
+        end
+    end
+end
 
--- ========== TAB SPEED & STAMINA ==========
+local function cleanupESP(plr)
+    for _, suffix in ipairs({"_Highlight","_Nametag"}) do
+        local obj = Storage:FindFirstChild(plr.Name..suffix)
+        if obj then pcall(function() obj:Destroy() end) end
+    end
+    if connections[plr] and connections[plr].HealthChanged then
+        pcall(function() connections[plr].HealthChanged:Disconnect() end)
+        connections[plr].HealthChanged = nil
+    end
+end
+
+-- TAB ESP (Tetap)
+for teamName, cfg in pairs(espConfigs) do
+    local tab = Window:CreateTab(teamName.." ESP", 4483362458)
+    tab:CreateToggle({Name="Enable ESP", CurrentValue=cfg.Enabled, Callback=function(v) cfg.Enabled = v updateAllESP() end})
+    tab:CreateToggle({Name="Show Name", CurrentValue=cfg.Name, Callback=function(v) cfg.Name = v updateAllESP() end})
+    tab:CreateToggle({Name="Show HP", CurrentValue=cfg.HP, Callback=function(v) cfg.HP = v updateAllESP() end})
+    tab:CreateToggle({Name="Show Fill", CurrentValue=cfg.Fill, Callback=function(v) cfg.Fill = v updateAllESP() end})
+    tab:CreateColorPicker({Name="Fill Color", Color=cfg.FillColor, Callback=function(c) cfg.FillColor = c updateAllESP() end})
+    tab:CreateSlider({Name="Fill Transparency", Range={0,1}, Increment=0.05, CurrentValue=cfg.FillTransparency, Callback=function(v) cfg.FillTransparency = v updateAllESP() end})
+end
+
+-- SPEED SETTINGS DENGAN TAMBAHAN STAMINA
+local tabSpeed = Window:CreateTab("Speed Setting", 4483362458)
 local character = lp.Character or lp.CharacterAdded:Wait()
-local walkSpeedValue, sprintSpeedValue, maxStaminaValue = 10, 27, 100
-local walkSpeedEnabled, sprintEnabled, staminaEnabled = false, false, false
-local loopConnection = nil
+local walkSpeedValue = character:GetAttribute("WalkSpeed") or 10
+local sprintSpeedValue = character:GetAttribute("SprintSpeed") or 27
 
-local function updateAttributes()
-    if unloaded or not character then return end
-    if walkSpeedEnabled then character:SetAttribute("WalkSpeed", walkSpeedValue) end
-    if sprintEnabled then character:SetAttribute("SprintSpeed", sprintSpeedValue) end
-    if staminaEnabled then character:SetAttribute("MaxStamina", maxStaminaValue) end
-    
-    if noclipEnabled then
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+tabSpeed:CreateSlider({Name="WalkSpeed", Range={8,200}, Increment=1, CurrentValue=walkSpeedValue, Callback=function(val) walkSpeedValue = val end})
+tabSpeed:CreateToggle({Name="Enable WalkSpeed", CurrentValue=false, Callback=function(v) walkSpeedEnabled = v end})
+
+-- FITUR PINDAHAN: MAX STAMINA (KODE ASLI UTUH)
+local keepStaminaEnabled = true
+local customStamina = 100
+tabSpeed:CreateToggle({
+    Name = "Keep MaxStamina (Enabled = Custom)",
+    CurrentValue = keepStaminaEnabled,
+    Callback = function(Value)
+        keepStaminaEnabled = Value
+        if lp.Character then
+            lp.Character:SetAttribute("MaxStamina", keepStaminaEnabled and customStamina or 100)
         end
     end
-
-    if noFogEnabled then
-        Lighting.FogEnd = 999999
-        Lighting.FogStart = 999999
-        if Lighting:FindFirstChildOfClass("Atmosphere") then
-            Lighting:FindFirstChildOfClass("Atmosphere").Parent = nil
+})
+tabSpeed:CreateInput({
+    Name = "Custom MaxStamina",
+    PlaceholderText = "0-999999",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(Text)
+        local num = tonumber(Text)
+        if num and num >= 0 and num <= 999999 then
+            customStamina = num
+            if keepStaminaEnabled and lp.Character then
+                lp.Character:SetAttribute("MaxStamina", customStamina)
+            end
         end
-        Lighting.Brightness = 2
-        Lighting.GlobalShadows = false
     end
-end
+})
 
-local function startLoop()
-    if loopConnection then loopConnection:Disconnect() end
-    loopConnection = RunService.Heartbeat:Connect(updateAttributes)
-end
 
-local tabSpeed = Window:CreateTab("Speed", 4483362458)
-tabSpeed:CreateToggle({Name="Enable WalkSpeed", CurrentValue=false, Callback=function(v) walkSpeedEnabled = v; startLoop() end})
-tabSpeed:CreateSlider({Name="WalkSpeed", Range={8,200}, Increment=1, CurrentValue=10, Callback=function(val) walkSpeedValue = val end})
-tabSpeed:CreateToggle({Name="Enable Sprint", CurrentValue=false, Callback=function(v) sprintEnabled = v; startLoop() end})
-tabSpeed:CreateSlider({Name="SprintSpeed", Range={16,300}, Increment=1, CurrentValue=27, Callback=function(val) sprintSpeedValue = val end})
-
-local tabStamina = Window:CreateTab("Stamina", 4483362458)
-tabStamina:CreateToggle({Name="Enable Custom Max Stamina", CurrentValue=false, Callback=function(v) staminaEnabled = v; startLoop() end})
-tabStamina:CreateSlider({Name="Max Stamina", Range={10, 1000}, Increment=5, CurrentValue=100, Callback=function(val) maxStaminaValue = val end})
-
--- ========== TAB MISC ==========
-local tabMisc = Window:CreateTab("Misc", 4483362458)
-
-tabMisc:CreateSection("Animations")
-local selectedAnimation = "Old"
-local animationSets = {
-    Old = { Adrenaline = "77399794134778", AdrenalineEnd = "92333601998082", Banana = "95775571866935", BlockLand = "94027412516651", BlockStart = "100651795910153", Caretaker = "136588017093606", CloakEnd = "0", CloakStart = "117841747115136", Dash = "82265255195607", DynamiteHold = "137091713941325", DynamiteThrow = "99551865645121", DynamiteWindup = "133960279206605", Hotdog = "93503428349113", PadBuild = "82160380573308", Punch = "135619604085485", Revolver = "73034688541555", RevolverReload = "74813841922695", Taunt = "113732291990231" },
-    New = { Adrenaline = "77399794134778", AdrenalineEnd = "92333601998082", Banana = "95775571866935", BlockLand = "94027412516651", BlockStart = "134233326423882", Caretaker = "128767098320893", CloakEnd = "120142279051418", CloakStart = "133960698072483", Dash = "78278813483757", DynamiteHold = "137091713941325", DynamiteThrow = "99551865645121", DynamiteWindup = "133960279206605", Hotdog = "78595119178919", PadBuild = "79104831518074", Punch = "124781750889573", Revolver = "74108653904830", RevolverReload = "79026181033717", Taunt = "113732291990231" }
+local tabAutoBlock = Window:CreateTab("AutoBlock", 4483362458)
+local KillerConfigs = {
+    ["Pursuer"] = {enabled = true, check = function(p, ws) return table.find({4,6,7,8,10,12,14,16,20}, ws) ~= nil end},
+    ["Artful"] = {enabled = true, check = function(p, ws) return table.find({4,7,8,12,16,20,9,13,17,21}, ws) ~= nil end},
+    ["Harken"] = {enabled = true, check = function(p, ws) return p:GetAttribute("AgitationCooldown") or table.find({4,8,12,16,20}, ws) ~= nil end},
+    ["Badware"] = {enabled = true, check = function(p, ws) return table.find({4,8,12,16,20}, ws) ~= nil end},
+    ["Killdroid"] = {enabled = true, check = function(p, ws) return table.find({-4,0,4,12,16,20}, ws) ~= nil end}
 }
 
-local function replaceAnimations(animationSet)
-    local survivorPath = workspace:FindFirstChild("GameAssets") and workspace.GameAssets:FindFirstChild("Teams") and workspace.GameAssets.Teams:FindFirstChild("Survivor") and workspace.GameAssets.Teams.Survivor:FindFirstChild(lp.Name)
-    local folder = (survivorPath and survivorPath:FindFirstChild("Animations") and survivorPath.Animations:FindFirstChild("Abilities")) or (workspace:FindFirstChild(lp.Name) and workspace[lp.Name]:GetChildren()[13] and workspace[lp.Name]:GetChildren()[13]:FindFirstChild("Abilities"))
-    if not folder then return end
-    for name, id in pairs(animationSet) do
-        local anim = folder:FindFirstChild(name)
-        if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
-    end
+for killerName, cfg in pairs(KillerConfigs) do
+    tabAutoBlock:CreateToggle({
+        Name = "Enable "..killerName,
+        CurrentValue = cfg.enabled,
+        Callback = function(val) cfg.enabled = val end
+    })
 end
 
-tabMisc:CreateButton({Name = "Anim Skill Old", Callback = function() selectedAnimation = "Old"; replaceAnimations(animationSets.Old) end})
-tabMisc:CreateButton({Name = "Anim Skill New", Callback = function() selectedAnimation = "New"; replaceAnimations(animationSets.New) end})
+local tabSkills = Window:CreateTab("Skill & Selector", 4483362458)
+local skillList = {"Revolver","Punch","Block","Caretaker","Hotdog","Taunt","Cloak","Dash","Banana","BonusPad","Adrenaline"}
+local selectedSkill1, selectedSkill2 = "Revolver", "Caretaker"
 
-tabMisc:CreateSection("Artful Custom")
-tabMisc:CreateToggle({Name = "Anti Artful Wall", CurrentValue = false, Callback = function(v) antiArtfulEnabled = v end})
-tabMisc:CreateToggle({Name = "Implement Fast Artful", CurrentValue = false, Callback = function(v) fastArtfulEnabled = v end})
-
-tabMisc:CreateSection("Visual & Movement")
-tabMisc:CreateToggle({Name = "No Fog", CurrentValue = false, Callback = function(v) noFogEnabled = v; startLoop() end})
-tabMisc:CreateButton({Name = "Flip 180°", Callback = function() 
-    if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-        lp.Character.HumanoidRootPart.CFrame = lp.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(180), 0)
+tabSkills:CreateDropdown({
+    Name = "Select Skill 1",
+    Options = skillList,
+    CurrentOption = {selectedSkill1},
+    Callback = function(opt) selectedSkill1 = opt[1] end
+})
+tabSkills:CreateDropdown({
+    Name = "Select Skill 2",
+    Options = skillList,
+    CurrentOption = {selectedSkill2},
+    Callback = function(opt) selectedSkill2 = opt[1] end
+})
+tabSkills:CreateButton({
+    Name = "Equip Skills",
+    Callback = function()
+        ReplicatedStorage.Events.RemoteEvents.AbilitySelection:FireServer({selectedSkill1, selectedSkill2})
     end
-end})
+})
 
-tabMisc:CreateSection("Exploits & Tools")
-tabMisc:CreateToggle({Name = "No Clip", CurrentValue = false, Callback = function(v) noclipEnabled = v; startLoop() end})
-tabMisc:CreateButton({Name = "Infinite Yield", Callback = function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end})
-tabMisc:CreateButton({Name = "Flip Script (V1)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SHRTRYScriptMANhere/stolenahhfrotflip/refs/heads/main/Flip"))() end})
-tabMisc:CreateButton({Name = "Change Animation V2", Callback = function() loadstring(game:HttpGet("https://gist.githubusercontent.com/tranvanxanh0502-afk/be6bf6dc9e3f5c2beb438418277af445/raw/d66fc9b710a26454b5eb1787f1b79bc00024ecb0/I%2520am%2520not%2520the%2520owner,%2520just%2520an%2520update"))() end})
+-- TAB GAMEPLAY SETTING SEKARANG BERNAMA MISC
+local tabMisc = Window:CreateTab("Misc", 4483362458)
 
--- ========== SETTINGS ==========
-local tabSettings = Window:CreateTab("Settings", 4483362458)
-tabSettings:CreateToggle({Name = "Instant ProximityPrompt", CurrentValue = false, Callback = function(v) _G.InstantPP = v end})
-tabSettings:CreateButton({Name="Unload Script", Callback=function() unloaded=true; Rayfield:Destroy() end})
+local lockWSM = true
+tabMisc:CreateToggle({
+    Name = "Lock WalkSpeedModifier (0)",
+    CurrentValue = lockWSM,
+    Callback = function(v) lockWSM = v end
+})
 
-mainConns.charAdded = lp.CharacterAdded:Connect(function(char)
-    character = char
-    task.wait(1)
-    startLoop()
-    replaceAnimations(animationSets[selectedAnimation])
+-- FITUR PINDAHAN DARI ANIMATIONS (KODE ASLI)
+local animationSets = {
+    Old = { Adrenaline = "77399794134778", BlockStart = "100651795910153", BlockLoop = "100346377755836", Punch = "135619604085485" },
+    New = { Adrenaline = "77399794134778", BlockStart = "134233326423882", BlockLoop = "133649520464871", Punch = "124781750889573" }
+}
+local function replaceAnimations(set)
+    pcall(function()
+        local survivorPath = workspace.GameAssets.Teams.Survivor:FindFirstChild(lp.Name)
+        local abilitiesFolder = survivorPath and survivorPath.Animations.Abilities
+        if abilitiesFolder then
+            for name, id in pairs(set) do
+                local anim = abilitiesFolder:FindFirstChild(name)
+                if anim then anim.AnimationId = "rbxassetid://" .. id end
+            end
+        end
+    end)
+end
+tabMisc:CreateButton({Name = "Anim Skill Old", Callback = function() replaceAnimations(animationSets.Old) end})
+tabMisc:CreateButton({Name = "Anim Skill New", Callback = function() replaceAnimations(animationSets.New) end})
+
+-- FITUR PINDAHAN DARI OTHER (LOADSTRING ASLI)
+tabMisc:CreateButton({
+    Name = "Change Animation V2",
+    Callback = function()
+        loadstring(game:HttpGet("https://gist.githubusercontent.com/tranvanxanh0502-afk/be6bf6dc9e3f5c2beb438418277af445/raw/d66fc9b710a26454b5eb1787f1b79bc00024ecb0/I%2520am%2520not%2520the%2520owner,%2520just%2520an%2520update", true))()
+    end
+})
+
+-- LOGIKA HEARTBEAT & UNLOAD
+local tabSett = Window:CreateTab("Setting", 4483362458)
+tabSett:CreateButton({Name="Unload Script", Callback=function() unloaded=true; CoreGui.Rayfield:Destroy() end})
+
+RunService.Heartbeat:Connect(function()
+    if unloaded then return end
+    if lockWSM and lp.Character then lp.Character:SetAttribute("WalkSpeedModifier", 0) end
 end)
-startLoop()
